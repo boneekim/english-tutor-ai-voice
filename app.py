@@ -275,9 +275,45 @@ def main():
     # 세션 상태 초기화
     init_session_state()
     
-    # 앱 시작 시 로컬 데이터 로드
+    # 앱 시작 시 Supabase 데이터 우선 로드, 실패 시 로컬 데이터 로드
     if not st.session_state.keywords:
-        load_local_data()
+        # 먼저 Supabase에서 데이터 로드 시도
+        supabase = init_supabase()
+        if supabase:
+            try:
+                supabase_data = load_from_supabase()
+                if supabase_data:
+                    # Supabase 데이터를 로컬 형식으로 변환
+                    converted_data = []
+                    for item in supabase_data:
+                        converted_data.append({
+                            'id': str(item['id']),
+                            'supabase_id': item['id'],
+                            'korean': item['korean'],
+                            'english': item['english'],
+                            'situation': item['situation'],
+                            'createdAt': item['created_at']
+                        })
+                    st.session_state.keywords = converted_data
+                    # 로컬에도 저장 (백업용)
+                    save_local_data()
+                    # 자동 로드 성공 표시
+                    if 'auto_loaded' not in st.session_state:
+                        st.session_state.auto_loaded = True
+                        st.success(f"🎯 데이터베이스에서 {len(converted_data)}개 키워드를 자동으로 불러왔습니다!")
+                else:
+                    # Supabase에 데이터가 없으면 로컬 데이터 로드
+                    load_local_data()
+                    if 'auto_loaded' not in st.session_state:
+                        st.session_state.auto_loaded = True
+                        st.info("📭 데이터베이스가 비어있어 로컬 데이터를 불러왔습니다")
+            except Exception as e:
+                # Supabase 연결 실패 시 로컬 데이터 로드
+                st.warning(f"⚠️ 데이터베이스 연결 실패, 로컬 데이터를 로드합니다: {e}")
+                load_local_data()
+        else:
+            # Supabase 초기화 실패 시 로컬 데이터 로드
+            load_local_data()
     
     # 헤더
     st.title("🎯 영어 AI음성지원 프로그램")
@@ -296,8 +332,10 @@ def main():
             st.warning("⚠️ Supabase 연결 필요")
             st.session_state.supabase_connected = False
         
-        # 데이터 동기화
-        if st.button("🔄 Supabase에서 데이터 동기화"):
+        # 데이터 수동 동기화 (앱 시작 시 자동 로드됨)
+        st.info("💡 앱 시작 시 데이터베이스에서 자동으로 키워드를 불러옵니다")
+        
+        if st.button("🔄 수동으로 데이터 새로고침"):
             if supabase:
                 supabase_data = load_from_supabase()
                 if supabase_data:
@@ -314,10 +352,10 @@ def main():
                         })
                     st.session_state.keywords = converted_data
                     save_local_data()
-                    st.success(f"✅ {len(supabase_data)}개 키워드 동기화 완료")
+                    st.success(f"✅ {len(supabase_data)}개 키워드 새로고침 완료")
                     st.rerun()
                 else:
-                    st.info("📭 동기화할 데이터가 없습니다")
+                    st.info("📭 데이터베이스에 저장된 키워드가 없습니다")
             else:
                 st.error("❌ Supabase 연결이 필요합니다")
         
@@ -379,16 +417,51 @@ def main():
     # 저장된 키워드 목록 섹션
     st.header("📚 저장된 키워드 목록")
     
-
+    # 검색 및 필터링 섹션
+    col_search, col_situation, col_clear = st.columns([3, 2, 1])
     
-    # 필터링
-    all_situations = ["전체"] + list(set([k['situation'] for k in st.session_state.keywords]))
-    selected_situation = st.selectbox("🎯 상황 필터", all_situations, key="filter")
+    with col_search:
+        search_query = st.text_input(
+            "🔍 키워드 검색", 
+            placeholder="한국어 또는 영어로 검색하세요...",
+            key="search_input",
+            help="입력한 검색어가 포함된 키워드를 찾습니다"
+        )
     
-    # 필터링된 키워드
+    with col_situation:
+        all_situations = ["전체"] + list(set([k['situation'] for k in st.session_state.keywords]))
+        selected_situation = st.selectbox("🎯 상황 필터", all_situations, key="filter")
+    
+    with col_clear:
+        st.write("")  # 공백 추가 (높이 맞춤)
+        if st.button("🔄 전체보기", help="검색 및 필터 초기화"):
+            # 검색창 초기화 및 페이지 새로고침
+            st.session_state.search_input = ""
+            st.rerun()
+    
+    # 검색 및 필터링 적용
     filtered_keywords = st.session_state.keywords
+    
+    # 상황 필터링
     if selected_situation != "전체":
-        filtered_keywords = [k for k in st.session_state.keywords if k['situation'] == selected_situation]
+        filtered_keywords = [k for k in filtered_keywords if k['situation'] == selected_situation]
+    
+    # 검색어 필터링
+    if search_query:
+        search_query_lower = search_query.lower()
+        filtered_keywords = [
+            k for k in filtered_keywords 
+            if search_query_lower in k['korean'].lower() or search_query_lower in k['english'].lower()
+        ]
+    
+    # 검색 상태 표시
+    if search_query:
+        if filtered_keywords:
+            st.success(f"🔍 '{search_query}' 검색 결과: **{len(filtered_keywords)}개** 키워드 발견")
+        else:
+            st.warning(f"❌ '{search_query}'에 대한 검색 결과가 없습니다")
+    elif selected_situation != "전체":
+        st.info(f"📂 '{selected_situation}' 카테고리: **{len(filtered_keywords)}개** 키워드")
     
     if not filtered_keywords:
         st.info("📭 저장된 키워드가 없습니다. 위에서 새 키워드를 추가해보세요!")
@@ -476,19 +549,19 @@ def main():
                 <p style="margin: 0; font-size: 0.9em; color: #6c757d;">각 언어별로 들을 수 있어요</p>
             </div>
             <div style="margin: 10px; text-align: center;">
+                <div style="font-size: 2em; margin-bottom: 5px;">🔍</div>
+                <p style="margin: 0; font-weight: bold;">키워드 검색</p>
+                <p style="margin: 0; font-size: 0.9em; color: #6c757d;">한국어/영어로 빠른 검색</p>
+            </div>
+            <div style="margin: 10px; text-align: center;">
                 <div style="font-size: 2em; margin-bottom: 5px;">⚙️</div>
                 <p style="margin: 0; font-weight: bold;">음성 설정</p>
                 <p style="margin: 0; font-size: 0.9em; color: #6c757d;">사이드바에서 남성/여성 선택</p>
             </div>
             <div style="margin: 10px; text-align: center;">
-                <div style="font-size: 2em; margin-bottom: 5px;">📱</div>
-                <p style="margin: 0; font-weight: bold;">모바일 지원</p>
-                <p style="margin: 0; font-size: 0.9em; color: #6c757d;">스마트폰에서도 사용 가능</p>
-            </div>
-            <div style="margin: 10px; text-align: center;">
                 <div style="font-size: 2em; margin-bottom: 5px;">☁️</div>
-                <p style="margin: 0; font-weight: bold;">클라우드 저장</p>
-                <p style="margin: 0; font-size: 0.9em; color: #6c757d;">데이터가 자동으로 저장돼요</p>
+                <p style="margin: 0; font-weight: bold;">자동 로드</p>
+                <p style="margin: 0; font-size: 0.9em; color: #6c757d;">앱 시작 시 데이터베이스에서 자동 로드</p>
             </div>
         </div>
     </div>

@@ -54,3 +54,22 @@ supabase/.temp/
 # Backup files
 *.bak
 *.backup
+
+# Streamlit secrets (보안상 GitHub에 업로드하면 안 됨)
+.streamlit/secrets.toml
+
+# Streamlit cache
+.streamlit/
+
+# Local data files
+keywords_data.json
+*.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/

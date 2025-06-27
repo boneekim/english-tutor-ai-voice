@@ -172,8 +172,9 @@ def main():
     # 세션 상태 초기화
     init_session_state()
     
-    # 앱 시작 시 Supabase 데이터 우선 로드, 실패 시 로컬 데이터 로드
-    if not st.session_state.keywords:
+    # 앱 시작 시 데이터베이스에서 자동 로드 (기본 모든 키워드 표시)
+    if 'auto_loaded' not in st.session_state:
+        st.session_state.auto_loaded = True
         # 먼저 Supabase에서 데이터 로드 시도
         supabase = init_supabase()
         if supabase:
@@ -195,15 +196,11 @@ def main():
                     # 로컬에도 저장 (백업용)
                     save_local_data()
                     # 자동 로드 성공 표시
-                    if 'auto_loaded' not in st.session_state:
-                        st.session_state.auto_loaded = True
-                        st.success(f"🎯 데이터베이스에서 {len(converted_data)}개 키워드를 자동으로 불러왔습니다!")
+                    st.success(f"🎯 데이터베이스에서 {len(converted_data)}개 키워드를 자동으로 불러왔습니다!")
                 else:
                     # Supabase에 데이터가 없으면 로컬 데이터 로드
                     load_local_data()
-                    if 'auto_loaded' not in st.session_state:
-                        st.session_state.auto_loaded = True
-                        st.info("📭 데이터베이스가 비어있어 로컬 데이터를 불러왔습니다")
+                    st.info("📭 데이터베이스가 비어있어 로컬 데이터를 불러왔습니다")
             except Exception as e:
                 # Supabase 연결 실패 시 로컬 데이터 로드
                 st.warning(f"⚠️ 데이터베이스 연결 실패, 로컬 데이터를 로드합니다: {e}")
@@ -211,6 +208,7 @@ def main():
         else:
             # Supabase 초기화 실패 시 로컬 데이터 로드
             load_local_data()
+            st.warning("⚠️ Supabase 초기화 실패, 로컬 데이터를 불러왔습니다")
     
     # 헤더
     st.title("🎯 영어 AI음성지원 프로그램")
@@ -346,9 +344,11 @@ def main():
             st.session_state.search_performed = False
             st.session_state.search_query = ""
             st.session_state.search_situation = "전체"
-            # 검색창 초기화를 위해 키를 안전하게 처리
+            # 검색창과 상황 필터 초기화를 위해 키를 안전하게 처리
             if 'search_input_field' in st.session_state:
                 del st.session_state.search_input_field
+            if 'situation_filter' in st.session_state:
+                del st.session_state.situation_filter
             st.rerun()
     
     # 검색 및 필터링 적용

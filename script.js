@@ -2,13 +2,16 @@
 const SUPABASE_URL = 'https://your-project-id.supabase.co';
 const SUPABASE_ANON_KEY = 'your-anon-key';
 
-// Supabase 클라이언트 초기화 (실제 키가 설정되면 활성화)
+// Supabase 클라이언트 초기화
 let supabase = null;
 try {
+    // 실제 사용 시 아래 주석을 해제하고 실제 URL과 키로 교체하세요
     // supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('Supabase 설정이 필요합니다.');
+    // isSupabaseConnected = true;
+    console.log('⚠️ Supabase 설정이 필요합니다. script.js 파일의 SUPABASE_URL과 SUPABASE_ANON_KEY를 실제 값으로 교체하세요.');
+    console.log('📖 상세 가이드: supabase-setup.md 파일을 참고하세요.');
 } catch (error) {
-    console.log('Supabase 클라이언트 초기화 대기 중...');
+    console.log('Supabase 클라이언트 초기화 오류:', error);
 }
 
 // 전역 변수
@@ -100,7 +103,7 @@ async function saveToSupabase(keyword) {
     }
     
     const { data, error } = await supabase
-        .from('keywords')
+        .from('english_tutor')
         .insert([
             {
                 korean: keyword.korean,
@@ -281,7 +284,7 @@ async function deleteFromSupabase(id) {
     }
     
     const { error } = await supabase
-        .from('keywords')
+        .from('english_tutor')
         .delete()
         .eq('id', id);
     

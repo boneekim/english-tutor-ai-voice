@@ -408,7 +408,12 @@ def main():
         )
     
     with col_situation:
-        all_situations = ["전체"] + list(set([k['situation'] for k in st.session_state.keywords]))
+        # 키워드 추가 시와 동일한 상황 카테고리 옵션 사용
+        situation_options = [
+            "일상대화", "비즈니스", "여행", "쇼핑", 
+            "레스토랑", "병원", "학교", "취미"
+        ]
+        all_situations = ["전체"] + situation_options
         situation_input = st.selectbox("🎯 상황 필터", all_situations, key="situation_filter")
     
     # 검색 및 초기화 버튼

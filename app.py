@@ -93,6 +93,9 @@ def save_to_supabase(keyword_data):
                 'user_email': 'doyousee2@naver.com',
                 'created_at': keyword_data['createdAt']
             }).execute()
+            # 저장된 데이터에서 Supabase ID 반환
+            if result.data and len(result.data) > 0:
+                return result.data[0]['id']
             return True
         except Exception as e:
             st.error(f"Supabase 저장 오류: {e}")
@@ -130,13 +133,45 @@ def add_keyword(korean, english, situation):
     save_local_data()
     
     # Supabase에 저장 시도
-    save_to_supabase(new_keyword)
+    supabase_id = save_to_supabase(new_keyword)
+    if supabase_id and isinstance(supabase_id, int):
+        # Supabase ID로 로컬 데이터 업데이트
+        new_keyword['id'] = str(supabase_id)
+        new_keyword['supabase_id'] = supabase_id
+        st.session_state.keywords[0] = new_keyword  # 첫 번째 항목 업데이트
     
     return True
 
 # 키워드 삭제 함수
 def delete_keyword(keyword_id):
     """키워드 삭제"""
+    # 삭제할 키워드 찾기
+    keyword_to_delete = None
+    for k in st.session_state.keywords:
+        if k['id'] == keyword_id:
+            keyword_to_delete = k
+            break
+    
+    # Supabase에서 삭제 시도
+    supabase = init_supabase()
+    if supabase and keyword_to_delete:
+        try:
+            # 먼저 ID로 삭제 시도
+            try:
+                result = supabase.table('english_tutor').delete().eq('id', int(keyword_id)).execute()
+                st.success("✅ Supabase에서 ID로 삭제 완료")
+            except:
+                # ID로 삭제 실패 시 한국어와 영어로 매칭해서 삭제
+                result = supabase.table('english_tutor').delete().match({
+                    'korean': keyword_to_delete['korean'],
+                    'english': keyword_to_delete['english'],
+                    'user_email': 'doyousee2@naver.com'
+                }).execute()
+                st.success("✅ Supabase에서 내용 매칭으로 삭제 완료")
+        except Exception as e:
+            st.error(f"❌ Supabase 삭제 오류: {e}")
+            
+    # 로컬에서 삭제
     st.session_state.keywords = [k for k in st.session_state.keywords if k['id'] != keyword_id]
     save_local_data()
 
@@ -171,11 +206,12 @@ def main():
             if supabase:
                 supabase_data = load_from_supabase()
                 if supabase_data:
-                    # Supabase 데이터를 로컬 형식으로 변환
+                    # Supabase 데이터를 로컬 형식으로 변환 (Supabase ID 유지)
                     converted_data = []
                     for item in supabase_data:
                         converted_data.append({
-                            'id': str(item['id']),
+                            'id': str(item['id']),  # Supabase ID 사용
+                            'supabase_id': item['id'],  # 원본 Supabase ID 보존
                             'korean': item['korean'],
                             'english': item['english'],
                             'situation': item['situation'],

@@ -30,56 +30,104 @@ def init_supabase():
         st.error(f"Supabase 연결 오류: {e}")
         return None
 
-# 개선된 TTS 기능 - 웹 브라우저 내장 Speech API 사용
-def create_tts_html(text, lang='en-US', gender='female'):
-    """웹 브라우저 Speech Synthesis API를 사용한 TTS HTML 생성"""
-    # 언어 및 음성 설정
-    voice_name = ""
-    if lang == 'ko-KR':
-        voice_name = "Google 한국의" if gender == 'female' else "Microsoft SunHi"
-    else:  # en-US
-        voice_name = "Google US English Female" if gender == 'female' else "Google US English Male"
-    
-    # 안전한 ID 생성
-    text_id = str(abs(hash(text)))[:8]
+# 개선된 TTS 기능 - JavaScript로 직접 음성 재생
+def create_tts_js(korean_text, english_text, gender='female'):
+    """한국어와 영어 TTS를 위한 JavaScript 함수 생성"""
     
     html_code = f"""
     <script>
-    function speakText_{text_id}() {{
+    // 음성 재생 함수들
+    function playKorean_{abs(hash(korean_text + english_text)) % 100000}() {{
         if ('speechSynthesis' in window) {{
-            // 기존 음성 중지
             window.speechSynthesis.cancel();
             
-            const utterance = new SpeechSynthesisUtterance('{text}');
-            utterance.lang = '{lang}';
+            const utterance = new SpeechSynthesisUtterance('{korean_text}');
+            utterance.lang = 'ko-KR';
             utterance.rate = 0.8;
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
             
-            // 사용 가능한 음성 중에서 선택
             const voices = window.speechSynthesis.getVoices();
-            let selectedVoice = null;
-            
-            // 성별에 따른 음성 선택
-            if ('{gender}' === 'female') {{
-                selectedVoice = voices.find(voice => 
-                    voice.lang.includes('{lang.split('-')[0]}') && 
-                    (voice.name.includes('Female') || voice.name.includes('여성') || voice.name.includes('Google'))
-                );
-            }} else {{
-                selectedVoice = voices.find(voice => 
-                    voice.lang.includes('{lang.split('-')[0]}') && 
+            let selectedVoice = voices.find(voice => 
+                voice.lang.includes('ko') && 
+                ({'true' if gender == 'female' else 'false'} ? 
+                    (voice.name.includes('Female') || voice.name.includes('여성') || voice.name.includes('Google')) :
                     (voice.name.includes('Male') || voice.name.includes('남성'))
-                );
-            }}
+                )
+            );
             
-            if (selectedVoice) {{
-                utterance.voice = selectedVoice;
-            }}
-            
+            if (selectedVoice) utterance.voice = selectedVoice;
             window.speechSynthesis.speak(utterance);
-        }} else {{
-            alert('이 브라우저는 음성 기능을 지원하지 않습니다.');
+        }}
+    }}
+    
+    function playEnglish_{abs(hash(korean_text + english_text)) % 100000}() {{
+        if ('speechSynthesis' in window) {{
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance('{english_text}');
+            utterance.lang = 'en-US';
+            utterance.rate = 0.8;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            const voices = window.speechSynthesis.getVoices();
+            let selectedVoice = voices.find(voice => 
+                voice.lang.includes('en') && 
+                ({'true' if gender == 'female' else 'false'} ? 
+                    (voice.name.includes('Female') || voice.name.includes('Google')) :
+                    (voice.name.includes('Male'))
+                )
+            );
+            
+            if (selectedVoice) utterance.voice = selectedVoice;
+            window.speechSynthesis.speak(utterance);
+        }}
+    }}
+    
+    function playBoth_{abs(hash(korean_text + english_text)) % 100000}() {{
+        if ('speechSynthesis' in window) {{
+            window.speechSynthesis.cancel();
+            
+            // 한국어 먼저 재생
+            const koreanUtterance = new SpeechSynthesisUtterance('{korean_text}');
+            koreanUtterance.lang = 'ko-KR';
+            koreanUtterance.rate = 0.8;
+            koreanUtterance.pitch = 1.0;
+            koreanUtterance.volume = 1.0;
+            
+            const voices = window.speechSynthesis.getVoices();
+            let koreanVoice = voices.find(voice => 
+                voice.lang.includes('ko') && 
+                ({'true' if gender == 'female' else 'false'} ? 
+                    (voice.name.includes('Female') || voice.name.includes('여성') || voice.name.includes('Google')) :
+                    (voice.name.includes('Male') || voice.name.includes('남성'))
+                )
+            );
+            
+            if (koreanVoice) koreanUtterance.voice = koreanVoice;
+            
+            // 한국어 재생 완료 후 영어 재생
+            koreanUtterance.onend = function() {{
+                const englishUtterance = new SpeechSynthesisUtterance('{english_text}');
+                englishUtterance.lang = 'en-US';
+                englishUtterance.rate = 0.8;
+                englishUtterance.pitch = 1.0;
+                englishUtterance.volume = 1.0;
+                
+                let englishVoice = voices.find(voice => 
+                    voice.lang.includes('en') && 
+                    ({'true' if gender == 'female' else 'false'} ? 
+                        (voice.name.includes('Female') || voice.name.includes('Google')) :
+                        (voice.name.includes('Male'))
+                    )
+                );
+                
+                if (englishVoice) englishUtterance.voice = englishVoice;
+                window.speechSynthesis.speak(englishUtterance);
+            }};
+            
+            window.speechSynthesis.speak(koreanUtterance);
         }}
     }}
     
@@ -90,13 +138,6 @@ def create_tts_html(text, lang='en-US', gender='female'):
         }};
     }}
     </script>
-    
-    <button onclick="speakText_{text_id}()" 
-            style="background-color: #4CAF50; color: white; border: none; 
-                   padding: 8px 16px; border-radius: 4px; cursor: pointer; 
-                   font-size: 14px; margin: 2px;">
-        🔊 {text[:20]}{'...' if len(text) > 20 else ''}
-    </button>
     """
     return html_code
 
@@ -338,6 +379,8 @@ def main():
     # 저장된 키워드 목록 섹션
     st.header("📚 저장된 키워드 목록")
     
+
+    
     # 필터링
     all_situations = ["전체"] + list(set([k['situation'] for k in st.session_state.keywords]))
     selected_situation = st.selectbox("🎯 상황 필터", all_situations, key="filter")
@@ -355,56 +398,67 @@ def main():
         # 키워드 표시
         for i, keyword in enumerate(filtered_keywords):
             with st.container():
-                # 키워드 카드 디자인
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                           padding: 20px; border-radius: 15px; margin-bottom: 15px; color: white;">
-                    <h3 style="margin: 0; font-size: 1.5em;">{keyword['korean']}</h3>
-                    <p style="margin: 8px 0; font-size: 1.2em; opacity: 0.9;">{keyword['english']}</p>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-                        <span style="background-color: rgba(255,255,255,0.2); padding: 6px 12px; 
-                                   border-radius: 20px; font-size: 0.9em;">📂 {keyword['situation']}</span>
-                        <span style="opacity: 0.7; font-size: 0.8em;">
-                            {datetime.fromisoformat(keyword['createdAt']).strftime('%Y-%m-%d %H:%M')}
-                        </span>
+                # 고유 ID 생성
+                unique_id = abs(hash(keyword['korean'] + keyword['english'])) % 100000
+                gender = 'female' if st.session_state.voice_gender == '여성' else 'male'
+                
+                # TTS JavaScript 생성
+                tts_js = create_tts_js(keyword['korean'], keyword['english'], gender)
+                st.components.v1.html(tts_js, height=0)
+                
+                # 키워드 카드와 삭제 버튼을 함께 표시
+                col_card, col_del = st.columns([9, 1])
+                
+                with col_card:
+                    # 키워드 카드 디자인
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                               padding: 20px; border-radius: 15px; margin-bottom: 15px; color: white;">
+                        <h3 style="margin: 0; font-size: 1.5em;">{keyword['korean']}</h3>
+                        <p style="margin: 8px 0; font-size: 1.2em; opacity: 0.9;">{keyword['english']}</p>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                            <span style="background-color: rgba(255,255,255,0.2); padding: 6px 12px; 
+                                       border-radius: 20px; font-size: 0.9em;">📂 {keyword['situation']}</span>
+                            <span style="opacity: 0.7; font-size: 0.8em;">
+                                {datetime.fromisoformat(keyword['createdAt']).strftime('%Y-%m-%d %H:%M')}
+                            </span>
+                        </div>
+                        
+                        <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button onclick="playKorean_{unique_id}()" 
+                                    style="background-color: rgba(255,255,255,0.2); color: white; border: none; 
+                                           padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 14px;
+                                           transition: all 0.3s;"
+                                    onmouseover="this.style.backgroundColor='rgba(255,255,255,0.4)'"
+                                    onmouseout="this.style.backgroundColor='rgba(255,255,255,0.2)'">
+                                🔊 한국어
+                            </button>
+                            
+                            <button onclick="playEnglish_{unique_id}()" 
+                                    style="background-color: rgba(255,255,255,0.2); color: white; border: none; 
+                                           padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 14px;
+                                           transition: all 0.3s;"
+                                    onmouseover="this.style.backgroundColor='rgba(255,255,255,0.4)'"
+                                    onmouseout="this.style.backgroundColor='rgba(255,255,255,0.2)'">
+                                🔊 영어
+                            </button>
+                            
+                            <button onclick="playBoth_{unique_id}()" 
+                                    style="background-color: rgba(255,255,255,0.3); color: white; border: none; 
+                                           padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 14px;
+                                           font-weight: bold; transition: all 0.3s;"
+                                    onmouseover="this.style.backgroundColor='rgba(255,255,255,0.5)'"
+                                    onmouseout="this.style.backgroundColor='rgba(255,255,255,0.3)'">
+                                🔊 둘 다
+                            </button>
+                        </div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
                 
-                # 액션 버튼들
-                col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-                
-                with col1:
-                    if st.button("🔊 한국어", key=f"kr_{keyword['id']}", help="한국어 음성 듣기"):
-                        gender = 'female' if st.session_state.voice_gender == '여성' else 'male'
-                        tts_html = create_tts_html(keyword['korean'], 'ko-KR', gender)
-                        st.components.v1.html(tts_html, height=60)
-                
-                with col2:
-                    if st.button("🔊 영어", key=f"en_{keyword['id']}", help="영어 음성 듣기"):
-                        gender = 'female' if st.session_state.voice_gender == '여성' else 'male'
-                        tts_html = create_tts_html(keyword['english'], 'en-US', gender)
-                        st.components.v1.html(tts_html, height=60)
-                
-                with col3:
-                    if st.button("🔊 둘 다", key=f"both_{keyword['id']}", help="한국어 + 영어 순서로 듣기"):
-                        gender = 'female' if st.session_state.voice_gender == '여성' else 'male'
-                        both_text = f"{keyword['korean']}. {keyword['english']}"
-                        # 한국어 먼저
-                        tts_html1 = create_tts_html(keyword['korean'], 'ko-KR', gender)
-                        st.components.v1.html(tts_html1, height=60)
-                        # 영어 나중에 (약간의 지연)
-                        tts_html2 = create_tts_html(keyword['english'], 'en-US', gender)
-                        st.components.v1.html(f"""
-                        <script>
-                        setTimeout(function() {{
-                            {tts_html2}
-                        }}, 2000);
-                        </script>
-                        """, height=60)
-                
-                with col4:
-                    if st.button("🗑️ 삭제", key=f"del_{keyword['id']}", help="키워드 삭제"):
+                with col_del:
+                    # 삭제 버튼 (Streamlit 버튼)
+                    if st.button("🗑️", key=f"del_{keyword['id']}", help="키워드 삭제", use_container_width=True):
                         delete_keyword(keyword['id'])
                         st.success("🗑️ 키워드가 삭제되었습니다.")
                         st.rerun()

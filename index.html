@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>영어 AI음성지원 프로그램</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>�� 영어 AI음성지원 프로그램</h1>
+            <p>한국어와 영어 키워드를 추가하고 AI 음성으로 학습하세요!</p>
+        </header>
+
+        <main>
+            <!-- 키워드 추가 섹션 -->
+            <section class="add-keyword-section">
+                <h2>키워드 추가</h2>
+                <form id="keywordForm" class="keyword-form">
+                    <div class="form-group">
+                        <label for="korean">한국어:</label>
+                        <input type="text" id="korean" name="korean" placeholder="한국어를 입력하세요" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="english">영어:</label>
+                        <input type="text" id="english" name="english" placeholder="English words here" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="situation">상황:</label>
+                        <select id="situation" name="situation" required>
+                            <option value="">상황을 선택하세요</option>
+                            <option value="일상대화">일상대화</option>
+                            <option value="비즈니스">비즈니스</option>
+                            <option value="여행">여행</option>
+                            <option value="쇼핑">쇼핑</option>
+                            <option value="레스토랑">레스토랑</option>
+                            <option value="병원">병원</option>
+                            <option value="학교">학교</option>
+                            <option value="취미">취미</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="add-btn">추가</button>
+                </form>
+            </section>
+
+            <!-- 저장된 키워드 목록 섹션 -->
+            <section class="saved-keywords-section">
+                <h2>저장된 키워드 목록</h2>
+                <div class="filter-section">
+                    <select id="filterSituation">
+                        <option value="">모든 상황</option>
+                        <option value="일상대화">일상대화</option>
+                        <option value="비즈니스">비즈니스</option>
+                        <option value="여행">여행</option>
+                        <option value="쇼핑">쇼핑</option>
+                        <option value="레스토랑">레스토랑</option>
+                        <option value="병원">병원</option>
+                        <option value="학교">학교</option>
+                        <option value="취미">취미</option>
+                    </select>
+                </div>
+                <div id="keywordsList" class="keywords-list">
+                    <p class="no-keywords">아직 저장된 키워드가 없습니다.</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- 로딩 인디케이터 -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>처리 중...</p>
+        </div>
+
+        <!-- 메시지 토스트 -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

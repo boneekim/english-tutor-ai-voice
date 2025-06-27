@@ -1,0 +1,47 @@
+{
+  "name": "english-tutor-ai-voice",
+  "version": "1.0.0",
+  "description": "영어 AI음성지원 프로그램 - 한국어와 영어 키워드를 저장하고 AI 음성으로 학습할 수 있는 웹 애플리케이션",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "serve": "python3 -m http.server 8000",
+    "dev": "live-server --port=8000",
+    "build": "echo 'No build process needed for vanilla HTML/CSS/JS'",
+    "test": "echo 'No tests specified yet'"
+  },
+  "keywords": [
+    "english",
+    "learning",
+    "tts",
+    "ai",
+    "voice",
+    "korean",
+    "education",
+    "supabase",
+    "github"
+  ],
+  "author": {
+    "name": "boneekim",
+    "email": "doyousee2@naver.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/boneekim/english-tutor-ai-voice.git"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}

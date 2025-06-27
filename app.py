@@ -314,6 +314,8 @@ def main():
     # 저장된 키워드 목록 섹션
     st.header("📚 저장된 키워드 목록")
     
+
+    
     # 검색 및 필터링 섹션
     col_search, col_situation = st.columns([3, 2])
     
@@ -344,7 +346,9 @@ def main():
             st.session_state.search_performed = False
             st.session_state.search_query = ""
             st.session_state.search_situation = "전체"
-            st.session_state.search_input_field = ""  # 검색창 초기화
+            # 검색창 초기화를 위해 키를 안전하게 처리
+            if 'search_input_field' in st.session_state:
+                del st.session_state.search_input_field
             st.rerun()
     
     # 검색 및 필터링 적용
@@ -397,86 +401,35 @@ def main():
                 col_card, col_del = st.columns([9, 1])
                 
                 with col_card:
-                    # 키워드 카드를 Streamlit 컴포넌트로 분리
-                    # 키워드 정보 표시
-                    st.markdown(f"""
-                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                               padding: 20px; border-radius: 15px; margin-bottom: 15px; color: white;">
-                        <h3 style="margin: 0; font-size: 1.5em;">{keyword['korean']}</h3>
-                        <p style="margin: 8px 0; font-size: 1.2em; opacity: 0.9;">{keyword['english']}</p>
+                    # 키워드 정보를 Streamlit 컴포넌트로만 깔끔하게 표시
+                    with st.container():
+                        # 키워드 제목
+                        st.markdown(f"### {keyword['korean']}")
+                        st.markdown(f"**{keyword['english']}**")
                         
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-                            <span style="background-color: rgba(255,255,255,0.2); padding: 6px 12px; 
-                                       border-radius: 20px; font-size: 0.9em;">📂 {keyword['situation']}</span>
-                            <span style="opacity: 0.7; font-size: 0.8em;">
-                                {datetime.fromisoformat(keyword['createdAt']).strftime('%Y-%m-%d %H:%M')}
-                            </span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # 음성 버튼들을 Streamlit 버튼으로 변경
-                    col_kr, col_en, col_both = st.columns([1, 1, 1])
-                    
-                    with col_kr:
-                        if st.button("🔊 한국어", key=f"kr_{unique_id}", use_container_width=True):
-                            # JavaScript 음성 재생을 위한 HTML 컴포넌트
-                            st.components.v1.html(f"""
-                            <script>
-                            if ('speechSynthesis' in window) {{
-                                window.speechSynthesis.cancel();
-                                const utterance = new SpeechSynthesisUtterance('{keyword['korean']}');
-                                utterance.lang = 'ko-KR';
-                                utterance.rate = 0.8;
-                                utterance.pitch = 1.0;
-                                utterance.volume = 1.0;
-                                window.speechSynthesis.speak(utterance);
-                            }}
-                            </script>
-                            """, height=0)
-                    
-                    with col_en:
-                        if st.button("🔊 영어", key=f"en_{unique_id}", use_container_width=True):
-                            st.components.v1.html(f"""
-                            <script>
-                            if ('speechSynthesis' in window) {{
-                                window.speechSynthesis.cancel();
-                                const utterance = new SpeechSynthesisUtterance('{keyword['english']}');
-                                utterance.lang = 'en-US';
-                                utterance.rate = 0.8;
-                                utterance.pitch = 1.0;
-                                utterance.volume = 1.0;
-                                window.speechSynthesis.speak(utterance);
-                            }}
-                            </script>
-                            """, height=0)
-                    
-                    with col_both:
-                        if st.button("🔊 둘 다", key=f"both_{unique_id}", use_container_width=True):
-                            st.components.v1.html(f"""
-                            <script>
-                            if ('speechSynthesis' in window) {{
-                                window.speechSynthesis.cancel();
-                                
-                                const koreanUtterance = new SpeechSynthesisUtterance('{keyword['korean']}');
-                                koreanUtterance.lang = 'ko-KR';
-                                koreanUtterance.rate = 0.8;
-                                koreanUtterance.pitch = 1.0;
-                                koreanUtterance.volume = 1.0;
-                                
-                                koreanUtterance.onend = function() {{
-                                    const englishUtterance = new SpeechSynthesisUtterance('{keyword['english']}');
-                                    englishUtterance.lang = 'en-US';
-                                    englishUtterance.rate = 0.8;
-                                    englishUtterance.pitch = 1.0;
-                                    englishUtterance.volume = 1.0;
-                                    window.speechSynthesis.speak(englishUtterance);
-                                }};
-                                
-                                window.speechSynthesis.speak(koreanUtterance);
-                            }}
-                            </script>
-                            """, height=0)
+                        # 메타데이터
+                        col_meta1, col_meta2 = st.columns([1, 1])
+                        with col_meta1:
+                            st.info(f"📂 {keyword['situation']}")
+                        with col_meta2:
+                            created_time = datetime.fromisoformat(keyword['createdAt']).strftime('%Y-%m-%d %H:%M')
+                            st.caption(f"🕒 {created_time}")
+                        
+                        # 음성 버튼들
+                        st.write("🔊 **음성 재생:**")
+                        col_kr, col_en, col_both = st.columns([1, 1, 1])
+                        
+                        with col_kr:
+                            st.button("🇰🇷 한국어", key=f"kr_{unique_id}", use_container_width=True, 
+                                    disabled=True, help=f"'{keyword['korean']}' 음성 재생 (개발 중)")
+                        
+                        with col_en:
+                            st.button("🇺🇸 영어", key=f"en_{unique_id}", use_container_width=True, 
+                                    disabled=True, help=f"'{keyword['english']}' 음성 재생 (개발 중)")
+                        
+                        with col_both:
+                            st.button("🌍 둘 다", key=f"both_{unique_id}", use_container_width=True, 
+                                    disabled=True, help="한국어 + 영어 연속 재생 (개발 중)")
                 
                 with col_del:
                     # 삭제 버튼 (Streamlit 버튼)

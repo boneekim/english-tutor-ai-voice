@@ -30,23 +30,75 @@ def init_supabase():
         st.error(f"Supabase 연결 오류: {e}")
         return None
 
-# TTS 기능을 위한 함수
-def text_to_speech_url(text, lang='en'):
-    """Google Translate TTS API를 사용하여 음성 URL 생성"""
-    try:
-        # Google Translate TTS (무료, 제한적)
-        base_url = "https://translate.google.com/translate_tts"
-        params = {
-            'ie': 'UTF-8',
-            'tl': lang,
-            'client': 'tw-ob',
-            'q': text
-        }
-        url = f"{base_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
-        return url
-    except Exception as e:
-        st.error(f"TTS URL 생성 오류: {e}")
-        return None
+# 개선된 TTS 기능 - 웹 브라우저 내장 Speech API 사용
+def create_tts_html(text, lang='en-US', gender='female'):
+    """웹 브라우저 Speech Synthesis API를 사용한 TTS HTML 생성"""
+    # 언어 및 음성 설정
+    voice_name = ""
+    if lang == 'ko-KR':
+        voice_name = "Google 한국의" if gender == 'female' else "Microsoft SunHi"
+    else:  # en-US
+        voice_name = "Google US English Female" if gender == 'female' else "Google US English Male"
+    
+    # 안전한 ID 생성
+    text_id = str(abs(hash(text)))[:8]
+    
+    html_code = f"""
+    <script>
+    function speakText_{text_id}() {{
+        if ('speechSynthesis' in window) {{
+            // 기존 음성 중지
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance('{text}');
+            utterance.lang = '{lang}';
+            utterance.rate = 0.8;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            // 사용 가능한 음성 중에서 선택
+            const voices = window.speechSynthesis.getVoices();
+            let selectedVoice = null;
+            
+            // 성별에 따른 음성 선택
+            if ('{gender}' === 'female') {{
+                selectedVoice = voices.find(voice => 
+                    voice.lang.includes('{lang.split('-')[0]}') && 
+                    (voice.name.includes('Female') || voice.name.includes('여성') || voice.name.includes('Google'))
+                );
+            }} else {{
+                selectedVoice = voices.find(voice => 
+                    voice.lang.includes('{lang.split('-')[0]}') && 
+                    (voice.name.includes('Male') || voice.name.includes('남성'))
+                );
+            }}
+            
+            if (selectedVoice) {{
+                utterance.voice = selectedVoice;
+            }}
+            
+            window.speechSynthesis.speak(utterance);
+        }} else {{
+            alert('이 브라우저는 음성 기능을 지원하지 않습니다.');
+        }}
+    }}
+    
+    // 음성 로드 대기
+    if (window.speechSynthesis.getVoices().length === 0) {{
+        window.speechSynthesis.onvoiceschanged = function() {{
+            console.log('음성 로드 완료');
+        }};
+    }}
+    </script>
+    
+    <button onclick="speakText_{text_id}()" 
+            style="background-color: #4CAF50; color: white; border: none; 
+                   padding: 8px 16px; border-radius: 4px; cursor: pointer; 
+                   font-size: 14px; margin: 2px;">
+        🔊 {text[:20]}{'...' if len(text) > 20 else ''}
+    </button>
+    """
+    return html_code
 
 # 세션 상태 초기화
 def init_session_state():
@@ -54,6 +106,8 @@ def init_session_state():
         st.session_state.keywords = []
     if 'supabase_connected' not in st.session_state:
         st.session_state.supabase_connected = False
+    if 'voice_gender' not in st.session_state:
+        st.session_state.voice_gender = '여성'
 
 # 로컬 데이터 로드
 def load_local_data():
@@ -202,7 +256,7 @@ def main():
             st.session_state.supabase_connected = False
         
         # 데이터 동기화
-        if st.button("�� Supabase에서 데이터 동기화"):
+        if st.button("🔄 Supabase에서 데이터 동기화"):
             if supabase:
                 supabase_data = load_from_supabase()
                 if supabase_data:
@@ -221,8 +275,19 @@ def main():
                     save_local_data()
                     st.success(f"✅ {len(supabase_data)}개 키워드 동기화 완료")
                     st.rerun()
+                else:
+                    st.info("📭 동기화할 데이터가 없습니다")
             else:
                 st.error("❌ Supabase 연결이 필요합니다")
+        
+        # 음성 설정
+        st.header("🔊 음성 설정")
+        st.session_state.voice_gender = st.selectbox(
+            "기본 음성 성별", 
+            ["여성", "남성"], 
+            index=0 if st.session_state.voice_gender == "여성" else 1,
+            key="global_voice_gender"
+        )
         
         # 통계
         st.header("📊 통계")
@@ -239,98 +304,139 @@ def main():
             for situation, count in situations.items():
                 st.write(f"• {situation}: {count}개")
     
-    # 메인 컨텐츠를 두 개 컬럼으로 분할
-    col1, col2 = st.columns([1, 1])
-    
     # 키워드 추가 섹션
-    with col1:
-        st.header("➕ 키워드 추가")
+    st.header("➕ 키워드 추가")
+    
+    with st.form("keyword_form"):
+        col1, col2 = st.columns([1, 1])
         
-        with st.form("keyword_form"):
-            korean_input = st.text_input("한국어", placeholder="한국어를 입력하세요")
-            english_input = st.text_input("영어", placeholder="English words here")
-            
+        with col1:
+            korean_input = st.text_input("한국어", placeholder="한국어 키워드를 입력하세요")
+            english_input = st.text_input("영어", placeholder="영어 키워드를 입력하세요")
+        
+        with col2:
             situation_options = [
                 "일상대화", "비즈니스", "여행", "쇼핑", 
                 "레스토랑", "병원", "학교", "취미"
             ]
-            situation_input = st.selectbox("상황", situation_options)
-            
-            submitted = st.form_submit_button("추가", use_container_width=True)
-            
-            if submitted:
-                if korean_input and english_input and situation_input:
-                    if add_keyword(korean_input, english_input, situation_input):
-                        st.success("✅ 키워드가 성공적으로 추가되었습니다!")
-                        st.rerun()
-                else:
-                    st.error("❌ 모든 필드를 입력해주세요.")
+            situation_input = st.selectbox("상황 카테고리", situation_options)
+            st.info("💡 사이드바에서 기본 음성 성별을 선택할 수 있습니다")
+        
+        submitted = st.form_submit_button("📝 키워드 추가", use_container_width=True)
+        
+        if submitted:
+            if korean_input and english_input and situation_input:
+                if add_keyword(korean_input, english_input, situation_input):
+                    st.success("✅ 키워드가 성공적으로 추가되었습니다!")
+                    st.rerun()
+            else:
+                st.error("❌ 모든 필드를 입력해주세요.")
+    
+    # 구분선
+    st.markdown("---")
     
     # 저장된 키워드 목록 섹션
-    with col2:
-        st.header("📚 저장된 키워드 목록")
+    st.header("📚 저장된 키워드 목록")
+    
+    # 필터링
+    all_situations = ["전체"] + list(set([k['situation'] for k in st.session_state.keywords]))
+    selected_situation = st.selectbox("🎯 상황 필터", all_situations, key="filter")
+    
+    # 필터링된 키워드
+    filtered_keywords = st.session_state.keywords
+    if selected_situation != "전체":
+        filtered_keywords = [k for k in st.session_state.keywords if k['situation'] == selected_situation]
+    
+    if not filtered_keywords:
+        st.info("📭 저장된 키워드가 없습니다. 위에서 새 키워드를 추가해보세요!")
+    else:
+        st.write(f"🔢 **{len(filtered_keywords)}개 키워드 발견**")
         
-        # 필터링
-        all_situations = ["전체"] + list(set([k['situation'] for k in st.session_state.keywords]))
-        selected_situation = st.selectbox("상황 필터", all_situations, key="filter")
-        
-        # 필터링된 키워드
-        filtered_keywords = st.session_state.keywords
-        if selected_situation != "전체":
-            filtered_keywords = [k for k in st.session_state.keywords if k['situation'] == selected_situation]
-        
-        if not filtered_keywords:
-            st.info("저장된 키워드가 없습니다.")
-        else:
-            # 키워드 표시
-            for i, keyword in enumerate(filtered_keywords):
-                with st.container():
-                    col_text, col_actions = st.columns([3, 1])
-                    
-                    with col_text:
-                        st.markdown(f"""
-                        <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
-                            <h4 style="margin: 0; color: #333;">{keyword['korean']}</h4>
-                            <p style="margin: 5px 0; color: #667eea; font-style: italic;">{keyword['english']}</p>
-                            <small style="background-color: #e9ecef; padding: 2px 8px; border-radius: 12px; color: #6c757d;">{keyword['situation']}</small>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with col_actions:
-                        # TTS 버튼
-                        if st.button("🔊", key=f"tts_{keyword['id']}", help="듣기"):
-                            # 영어 TTS
-                            english_url = text_to_speech_url(keyword['english'], 'en')
-                            if english_url:
-                                st.markdown(f"""
-                                <audio controls autoplay style="width: 100%;">
-                                    <source src="{english_url}" type="audio/mpeg">
-                                    Your browser does not support the audio element.
-                                </audio>
-                                """, unsafe_allow_html=True)
-                            
-                            # 한국어 TTS
-                            korean_url = text_to_speech_url(keyword['korean'], 'ko')
-                            if korean_url:
-                                st.markdown(f"""
-                                <audio controls style="width: 100%;">
-                                    <source src="{korean_url}" type="audio/mpeg">
-                                    Your browser does not support the audio element.
-                                </audio>
-                                """, unsafe_allow_html=True)
-                        
-                        # 삭제 버튼
-                        if st.button("🗑️", key=f"del_{keyword['id']}", help="삭제"):
-                            delete_keyword(keyword['id'])
-                            st.success("키워드가 삭제되었습니다.")
-                            st.rerun()
+        # 키워드 표시
+        for i, keyword in enumerate(filtered_keywords):
+            with st.container():
+                # 키워드 카드 디자인
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                           padding: 20px; border-radius: 15px; margin-bottom: 15px; color: white;">
+                    <h3 style="margin: 0; font-size: 1.5em;">{keyword['korean']}</h3>
+                    <p style="margin: 8px 0; font-size: 1.2em; opacity: 0.9;">{keyword['english']}</p>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                        <span style="background-color: rgba(255,255,255,0.2); padding: 6px 12px; 
+                                   border-radius: 20px; font-size: 0.9em;">📂 {keyword['situation']}</span>
+                        <span style="opacity: 0.7; font-size: 0.8em;">
+                            {datetime.fromisoformat(keyword['createdAt']).strftime('%Y-%m-%d %H:%M')}
+                        </span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # 액션 버튼들
+                col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+                
+                with col1:
+                    if st.button("🔊 한국어", key=f"kr_{keyword['id']}", help="한국어 음성 듣기"):
+                        gender = 'female' if st.session_state.voice_gender == '여성' else 'male'
+                        tts_html = create_tts_html(keyword['korean'], 'ko-KR', gender)
+                        st.components.v1.html(tts_html, height=60)
+                
+                with col2:
+                    if st.button("🔊 영어", key=f"en_{keyword['id']}", help="영어 음성 듣기"):
+                        gender = 'female' if st.session_state.voice_gender == '여성' else 'male'
+                        tts_html = create_tts_html(keyword['english'], 'en-US', gender)
+                        st.components.v1.html(tts_html, height=60)
+                
+                with col3:
+                    if st.button("🔊 둘 다", key=f"both_{keyword['id']}", help="한국어 + 영어 순서로 듣기"):
+                        gender = 'female' if st.session_state.voice_gender == '여성' else 'male'
+                        both_text = f"{keyword['korean']}. {keyword['english']}"
+                        # 한국어 먼저
+                        tts_html1 = create_tts_html(keyword['korean'], 'ko-KR', gender)
+                        st.components.v1.html(tts_html1, height=60)
+                        # 영어 나중에 (약간의 지연)
+                        tts_html2 = create_tts_html(keyword['english'], 'en-US', gender)
+                        st.components.v1.html(f"""
+                        <script>
+                        setTimeout(function() {{
+                            {tts_html2}
+                        }}, 2000);
+                        </script>
+                        """, height=60)
+                
+                with col4:
+                    if st.button("🗑️ 삭제", key=f"del_{keyword['id']}", help="키워드 삭제"):
+                        delete_keyword(keyword['id'])
+                        st.success("🗑️ 키워드가 삭제되었습니다.")
+                        st.rerun()
+                
+                st.markdown("---")
     
     # 하단 정보
-    st.markdown("---")
     st.markdown("""
-    <div style="text-align: center; color: #6c757d;">
-        <p>💡 <strong>Tip:</strong> 매일 꾸준히 사용하여 영어 실력을 향상시켜보세요!</p>
-        <p>🔊 '듣기' 버튼을 클릭하면 영어와 한국어 발음을 들을 수 있습니다.</p>
+    <div style="text-align: center; padding: 20px; background-color: #f8f9fa; border-radius: 10px; margin-top: 30px;">
+        <h3 style="color: #495057; margin-bottom: 15px;">💡 사용 팁</h3>
+        <div style="display: flex; justify-content: space-around; flex-wrap: wrap;">
+            <div style="margin: 10px; text-align: center;">
+                <div style="font-size: 2em; margin-bottom: 5px;">🔊</div>
+                <p style="margin: 0; font-weight: bold;">음성 듣기</p>
+                <p style="margin: 0; font-size: 0.9em; color: #6c757d;">각 언어별로 들을 수 있어요</p>
+            </div>
+            <div style="margin: 10px; text-align: center;">
+                <div style="font-size: 2em; margin-bottom: 5px;">⚙️</div>
+                <p style="margin: 0; font-weight: bold;">음성 설정</p>
+                <p style="margin: 0; font-size: 0.9em; color: #6c757d;">사이드바에서 남성/여성 선택</p>
+            </div>
+            <div style="margin: 10px; text-align: center;">
+                <div style="font-size: 2em; margin-bottom: 5px;">📱</div>
+                <p style="margin: 0; font-weight: bold;">모바일 지원</p>
+                <p style="margin: 0; font-size: 0.9em; color: #6c757d;">스마트폰에서도 사용 가능</p>
+            </div>
+            <div style="margin: 10px; text-align: center;">
+                <div style="font-size: 2em; margin-bottom: 5px;">☁️</div>
+                <p style="margin: 0; font-weight: bold;">클라우드 저장</p>
+                <p style="margin: 0; font-size: 0.9em; color: #6c757d;">데이터가 자동으로 저장돼요</p>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 

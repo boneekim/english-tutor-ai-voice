@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import json
 from datetime import datetime
@@ -166,6 +167,87 @@ def delete_keyword(keyword_id):
     # 로컬에서 삭제
     st.session_state.keywords = [k for k in st.session_state.keywords if k['id'] != keyword_id]
     save_local_data()
+
+# TTS 음성 재생 함수
+def play_tts(text, lang='ko', voice_gender='여성'):
+    """TTS 음성 재생"""
+    # 텍스트 안전화 (JavaScript injection 방지)
+    safe_text = text.replace('"', '\\"').replace("'", "\\'").replace('\n', ' ').replace('\r', ' ')
+    
+    # 언어 설정
+    voice_lang = 'ko-KR' if lang == 'ko' else 'en-US'
+    gender_filter = 'female' if voice_gender == '여성' else 'male'
+    
+    # JavaScript 코드로 TTS 실행
+    tts_html = f"""
+    <script>
+    function playTTS() {{
+        try {{
+            // 이전 음성 중단
+            window.speechSynthesis.cancel();
+            
+            // Speech Synthesis 지원 확인
+            if (!window.speechSynthesis) {{
+                alert('이 브라우저는 음성 합성을 지원하지 않습니다.');
+                return;
+            }}
+            
+            // 새 음성 생성
+            const utterance = new SpeechSynthesisUtterance("{safe_text}");
+            utterance.lang = "{voice_lang}";
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+            utterance.volume = 1;
+            
+            // 음성 선택 (영어의 경우 성별 고려)
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0 && "{lang}" === "en") {{
+                const targetVoice = voices.find(voice => 
+                    voice.lang.includes("{voice_lang}") && 
+                    voice.name.toLowerCase().includes("{gender_filter}")
+                );
+                if (targetVoice) {{
+                    utterance.voice = targetVoice;
+                }}
+            }}
+            
+            // 이벤트 핸들러
+            utterance.onstart = function() {{
+                console.log('🔊 음성 재생 시작: {safe_text}');
+            }};
+            
+            utterance.onend = function() {{
+                console.log('✅ 음성 재생 완료');
+            }};
+            
+            utterance.onerror = function(e) {{
+                console.error('❌ 음성 재생 오류:', e);
+            }};
+            
+            // 음성 재생
+            window.speechSynthesis.speak(utterance);
+            
+        }} catch (error) {{
+            console.error('TTS 실행 오류:', error);
+            alert('음성 재생 중 오류가 발생했습니다.');
+        }}
+    }}
+    
+    // 페이지 로드 후 즉시 실행
+    if (document.readyState === 'loading') {{
+        document.addEventListener('DOMContentLoaded', playTTS);
+    }} else {{
+        playTTS();
+    }}
+    </script>
+    
+    <div style="text-align: center; padding: 10px; background-color: #e8f5e8; border-radius: 5px; margin: 5px 0;">
+        <span style="color: #28a745; font-weight: bold;">🔊 "{text}" 음성 재생 중...</span>
+    </div>
+    """
+    
+    # HTML 컴포넌트로 실행
+    components.html(tts_html, height=60)
 
 # 메인 앱
 def main():
@@ -420,16 +502,96 @@ def main():
                         col_kr, col_en, col_both = st.columns([1, 1, 1])
                         
                         with col_kr:
-                            st.button("🇰🇷 한국어", key=f"kr_{unique_id}", use_container_width=True, 
-                                    disabled=True, help=f"'{keyword['korean']}' 음성 재생 (개발 중)")
+                            if st.button("🇰🇷 한국어", key=f"kr_{unique_id}", use_container_width=True, 
+                                        help=f"'{keyword['korean']}' 한국어 음성 재생"):
+                                play_tts(keyword['korean'], lang='ko', voice_gender=st.session_state.voice_gender)
                         
                         with col_en:
-                            st.button("🇺🇸 영어", key=f"en_{unique_id}", use_container_width=True, 
-                                    disabled=True, help=f"'{keyword['english']}' 음성 재생 (개발 중)")
+                            if st.button("🇺🇸 영어", key=f"en_{unique_id}", use_container_width=True, 
+                                        help=f"'{keyword['english']}' 영어 음성 재생"):
+                                play_tts(keyword['english'], lang='en', voice_gender=st.session_state.voice_gender)
                         
                         with col_both:
-                            st.button("🌍 둘 다", key=f"both_{unique_id}", use_container_width=True, 
-                                    disabled=True, help="한국어 + 영어 연속 재생 (개발 중)")
+                            if st.button("🌍 둘 다", key=f"both_{unique_id}", use_container_width=True, 
+                                        help="한국어 + 영어 순서대로 연속 재생"):
+                                # 텍스트 안전화
+                                safe_korean = keyword['korean'].replace('"', '\\"').replace("'", "\\'")
+                                safe_english = keyword['english'].replace('"', '\\"').replace("'", "\\'")
+                                
+                                # 한국어와 영어를 연속으로 재생하는 JavaScript 코드
+                                tts_both_html = f"""
+                                <script>
+                                function playBothLanguages() {{
+                                    try {{
+                                        // Speech Synthesis 지원 확인
+                                        if (!window.speechSynthesis) {{
+                                            alert('이 브라우저는 음성 합성을 지원하지 않습니다.');
+                                            return;
+                                        }}
+                                        
+                                        // 이전 음성 중단
+                                        window.speechSynthesis.cancel();
+                                        
+                                        // 한국어 먼저 재생
+                                        const utterance1 = new SpeechSynthesisUtterance("{safe_korean}");
+                                        utterance1.lang = "ko-KR";
+                                        utterance1.rate = 0.9;
+                                        utterance1.pitch = 1;
+                                        utterance1.volume = 1;
+                                        
+                                        // 한국어 재생 완료 후 영어 재생
+                                        utterance1.onend = function() {{
+                                            setTimeout(function() {{
+                                                const utterance2 = new SpeechSynthesisUtterance("{safe_english}");
+                                                utterance2.lang = "en-US";
+                                                utterance2.rate = 0.9;
+                                                utterance2.pitch = 1;
+                                                utterance2.volume = 1;
+                                                
+                                                // 영어 음성 선택 (성별 고려)
+                                                const voices = window.speechSynthesis.getVoices();
+                                                if (voices.length > 0) {{
+                                                    const genderFilter = "{st.session_state.voice_gender}" === "여성" ? "female" : "male";
+                                                    const targetVoice = voices.find(voice => 
+                                                        voice.lang.includes("en-US") && 
+                                                        voice.name.toLowerCase().includes(genderFilter)
+                                                    );
+                                                    if (targetVoice) {{
+                                                        utterance2.voice = targetVoice;
+                                                    }}
+                                                }}
+                                                
+                                                window.speechSynthesis.speak(utterance2);
+                                            }}, 500);
+                                        }};
+                                        
+                                        // 오류 처리
+                                        utterance1.onerror = function(e) {{
+                                            console.error('한국어 음성 재생 오류:', e);
+                                        }};
+                                        
+                                        // 한국어 재생 시작
+                                        window.speechSynthesis.speak(utterance1);
+                                        
+                                    }} catch (error) {{
+                                        console.error('연속 재생 오류:', error);
+                                        alert('음성 연속 재생 중 오류가 발생했습니다.');
+                                    }}
+                                }}
+                                
+                                // 페이지 로드 후 즉시 실행
+                                if (document.readyState === 'loading') {{
+                                    document.addEventListener('DOMContentLoaded', playBothLanguages);
+                                }} else {{
+                                    playBothLanguages();
+                                }}
+                                </script>
+                                
+                                <div style="text-align: center; padding: 10px; background-color: #fff3cd; border-radius: 5px; margin: 5px 0;">
+                                    <span style="color: #856404; font-weight: bold;">🌍 "{keyword['korean']}" → "{keyword['english']}" 연속 재생 중...</span>
+                                </div>
+                                """
+                                components.html(tts_both_html, height=60)
                 
                 with col_del:
                     # 삭제 버튼 (Streamlit 버튼)
